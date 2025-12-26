@@ -21,5 +21,5 @@ variable "rds_tags" {
 }
 
 variable "zone_name" {
-    default = "devopwithaws.store"
+    default = "devopswithaws.store"
 }

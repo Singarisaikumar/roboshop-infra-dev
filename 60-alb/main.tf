@@ -51,10 +51,11 @@ resource "aws_lb_listener" "https" {
 
 module "records" {
   source  = "terraform-aws-modules/route53/aws//modules/records"
+  version = "~> 2.0"
 
-  
+  zone_name = var.zone_name 
   records = [
-
+     
     {
       name    = "roboshop-${var.environment}" # roboshop-dev.daws81s.online
       type    = "A"
@@ -63,7 +64,7 @@ module "records" {
         zone_id = module.ingress_alb.zone_id # This belongs ALB internal hosted zone, not ours
       }
       allow_overwrite = true
-      zone_name = var.zone_name #daws81s.online
+      
     }
   ]
 }

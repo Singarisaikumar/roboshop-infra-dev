@@ -1,99 +1,102 @@
-
-resource "aws_cloudfront_distribution" "roboshop" {
+resource "aws_cloudfront_distribution" "web_cdn" {
   origin {
-    domain_name              = "${var.project_name}-${var.environment}.${var.zone_name}"
-    origin_id                = "${var.project_name}-${var.environment}.${var.zone_name}"
-
+    domain_name                = "web-${var.environment}.${var.zone_name}"
+    origin_id                  = "web-${var.environment}.${var.zone_name}"
     custom_origin_config {
-        http_port = 80
-        https_port = 443
+        http_port              = 80 
+        https_port             = 443
         origin_protocol_policy = "https-only"
-        origin_ssl_protocols = ["TLSv1.2"]
+        origin_ssl_protocols   = ["TLSv1.2"]
+       }
     }
-  }
 
-  enabled             = true
+  enabled  = true
+  
+  aliases = ["web-${var.common_tags.Component}.${var.zone_name}"]
 
-  aliases = ["${var.project_name}-cdn.${var.zone_name}"]
-
-  # dynamic content, evaluated at last no cache
   default_cache_behavior {
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "${var.project_name}-${var.environment}.${var.zone_name}"
-
-    viewer_protocol_policy = "redirect-to-https"
+    target_origin_id = "web-${var.environment}.${var.zone_name}"
     min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
-    cache_policy_id = data.aws_cloudfront_cache_policy.noCache.id
+    default_ttl            = 86400
+    max_ttl                = 31536000
+    compress               = true
+    viewer_protocol_policy = "redirect-to-https"
+    cache_policy_id        = data.aws_cloudfront_cache_policy.cache_disable.id
   }
 
-  # Cache behavior with precedence 0
+   # Cache behavior with precedence 0
   ordered_cache_behavior {
     path_pattern     = "/images/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id = "${var.project_name}-${var.environment}.${var.zone_name}"
+    target_origin_id = "web-${var.environment}.${var.zone_name}"
+    cache_policy_id  =  data.aws_cloudfront_cache_policy.cache_enable.id
 
     min_ttl                = 0
     default_ttl            = 86400
     max_ttl                = 31536000
     compress               = true
     viewer_protocol_policy = "redirect-to-https"
-    cache_policy_id = data.aws_cloudfront_cache_policy.cacheOptmised.id
   }
 
-  # Cache behavior with precedence 1
+   # Cache behavior with precedence 1
   ordered_cache_behavior {
     path_pattern     = "/static/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id = "${var.project_name}-${var.environment}.${var.zone_name}"
-
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "web-${var.environment}.${var.zone_name}"
+    cache_policy_id  = data.aws_cloudfront_cache_policy.cache_enable.id
+    
     min_ttl                = 0
     default_ttl            = 86400
     max_ttl                = 31536000
     compress               = true
     viewer_protocol_policy = "redirect-to-https"
-    cache_policy_id = data.aws_cloudfront_cache_policy.cacheOptmised.id
   }
 
   restrictions {
     geo_restriction {
       restriction_type = "whitelist"
-      locations        = ["IN", "CA", "GB", "DE"]
+      locations        = ["US", "CA", "GB", "DE"]
     }
   }
 
   tags = merge(
     var.common_tags,
     {
-        Name = local.resource_name
+        Name = "${var.project_name}-${var.environment}"
     }
   )
 
   viewer_certificate {
-    acm_certificate_arn = local.https_certificate_arn
-    ssl_support_method = "sni-only"
+    acm_certificate_arn      = data.aws_ssm_parameter.acm_certificate_arn.value
     minimum_protocol_version = "TLSv1.2_2021"
+    ssl_support_method       = "sni-only"
   }
+}
+
+# Create Route53 records for the CloudFront distribution aliases
+data "aws_route53_zone" "web_cdn" {
+   name = var.zone_name
 }
 
 module "records" {
   source  = "terraform-aws-modules/route53/aws//modules/records"
+  version = "~> 2.0"
 
-   #daws81s.online
+  zone_name = var.zone_name
+
   records = [
     {
-      name    = "roboshop-cdn" # *.app-dev
-      type    = "A"
-      alias   = {
-        name    = aws_cloudfront_distribution.roboshop.domain_name
-        zone_id = aws_cloudfront_distribution.roboshop.hosted_zone_id # This belongs CDN internal hosted zone, not ours
-      }
+      name            = "web-cdn"
+      type            = "A"
       allow_overwrite = true
-      zone_name = var.zone_name
+      alias = {
+         name     = aws_cloudfront_distribution.web_cdn.domain_name
+         zone_id  = aws_cloudfront_distribution.web_cdn.hosted_zone_id 
+      }
     }
   ]
 }
