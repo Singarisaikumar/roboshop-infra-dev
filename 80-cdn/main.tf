@@ -83,7 +83,7 @@ resource "aws_cloudfront_distribution" "roboshop" {
 module "records" {
   source  = "terraform-aws-modules/route53/aws//modules/records"
 
-  zone_name = var.zone_name #daws81s.online
+   #daws81s.online
   records = [
     {
       name    = "roboshop-cdn" # *.app-dev
@@ -93,6 +93,7 @@ module "records" {
         zone_id = aws_cloudfront_distribution.roboshop.hosted_zone_id # This belongs CDN internal hosted zone, not ours
       }
       allow_overwrite = true
+      zone_name = var.zone_name
     }
   ]
 }
